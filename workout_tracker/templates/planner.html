@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Workout Planner</h2>
+    <p style="color: #aaa;">Drag to reorder today's routine.</p>
+    
+    <div id="workout-list">
+        {% for w in workouts %}
+        <div class="list-item" style="background: #2a2a2a; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444;" data-name="{{ w.name }}" data-sets="{{ w.sets }}" data-rest="{{ w.rest }}">
+            ☰ <strong>{{ w.name }}</strong> <br>
+            <small style="color: #888;">{{ w.sets }} Sets | {{ w.rest }}s Rest</small>
+        </div>
+        {% endfor %}
+    </div>
+
+    <button class="btn-primary" onclick="saveOrder()" style="margin-top: 20px;">Save Custom Order</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+    new Sortable(document.getElementById('workout-list'), { animation: 150 });
+
+    function saveOrder() {
+        let newOrder = [];
+        document.querySelectorAll('.list-item').forEach(el => {
+            newOrder.push({
+                name: el.getAttribute('data-name'),
+                sets: parseInt(el.getAttribute('data-sets')),
+                rest: parseInt(el.getAttribute('data-rest'))
+            });
+        });
+
+        fetch('/api/update_schedule/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({schedule: newOrder})
+        }).then(() => alert("Order saved for today!"));
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,463 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    /* Global fixes */
+    input[type="checkbox"] { width: 24px; height: 24px; margin-right: 15px; accent-color: #38B000; }
+    .check-row { display: flex; align-items: center; background: #2a2a2a; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #444; }
+    .check-row label { flex-grow: 1; font-weight: bold; font-size: 18px; margin: 0; }
+    
+    /* Tabs */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Bottom Nav */
+    .bottom-nav {
+        position: fixed; bottom: 0; left: 0; width: 100%;
+        background: #1a1a1a; border-top: 1px solid #333;
+        display: flex; justify-content: space-around; padding: 15px 0; z-index: 1000;
+    }
+    .bottom-nav button { background: none; border: none; color: #888; font-size: 14px; font-weight: bold; padding: 0; margin: 0; width: 33%; }
+    .bottom-nav button.active { color: #3A86FF; }
+
+    /* Planner Accordion */
+    .day-header { background: #333; padding: 15px; border-radius: 5px; margin-top: 10px; font-weight: bold; cursor: pointer; color: #3A86FF;}
+    .day-list { display: none; padding: 10px; background: #1e1e1e; border: 1px solid #333; border-top: none; }
+</style>
+
+<div class="flex" style="margin-bottom: 20px;">
+    <h3>{{ name }}</h3>
+    <a href="{% url 'logout' %}" onclick="localStorage.removeItem('workoutSession');" style="color: #D00000; font-weight: bold; text-decoration: none;">Logout</a>
+</div>
+
+<div id="tab-home" class="tab-content active">
+    {% if completed %}
+    <div class="card"><h2 style="color: #38B000;">Day Complete. Rest up.</h2></div>
+    {% else %}
+    
+    <div id="setup-screen" class="card">
+        <h4 style="margin-top: 0;">Setup Today</h4>
+        <div class="check-row">
+            <input type="checkbox" id="warmup-check" checked>
+            <label>Warmup</label>
+            <input type="number" id="warmup-time" value="10" style="width: 80px; margin: 0; padding: 8px;" placeholder="Mins">
+        </div>
+        <div class="check-row">
+            <input type="checkbox" id="workout-check" checked>
+            <label>Main Workout</label>
+        </div>
+        <div class="check-row">
+            <input type="checkbox" id="stretch-check" checked>
+            <label>Post Stretch</label>
+        </div>
+        <button class="btn-success" onclick="startSession()" style="margin-top: 20px; font-size: 18px; padding: 15px;">START SESSION</button>
+    </div>
+
+    <div id="active-screen" class="card" style="display: none; text-align: center;">
+        <h3 id="current-task" style="color: #3A86FF; margin-bottom: 5px;">Task</h3>
+        <p id="set-tracker" style="color: #FFAA00; font-weight: bold; margin: 0; height: 20px;"></p>
+        
+        <h1 id="timer" style="font-size: 70px; margin: 15px 0;">00:00</h1>
+        
+        <div class="flex" style="gap: 10px;">
+            <button id="pause-btn" class="btn-warning" style="padding: 15px; font-size: 16px;" onclick="togglePause()">Pause</button>
+            <button id="next-btn" class="btn-success" style="padding: 15px; font-size: 16px;" onclick="nextPhase()">Finish</button>
+        </div>
+        <button id="stop-btn" style="background: #D00000; color: white; padding: 15px; font-size: 16px; margin-top: 10px; display: none;" onclick="stopSession()">Stop Workout Entirely</button>
+
+        <div id="log-form" style="display: none; text-align: left; margin-top: 25px; background: #1a1a1a; padding: 15px; border-radius: 8px;">
+            <h4 style="margin-top: 0; color: #aaa;">Workout Details</h4>
+            <div class="flex">
+                <select id="w-type">
+                    <option value="individual">Individual Dumbbells</option>
+                    <option value="whole">Whole Weight</option>
+                </select>
+                <input type="number" id="w-val" placeholder="Weight (kg)">
+            </div>
+            <textarea id="w-summary" placeholder="Summary notes for next time..." rows="8" style="resize: none;"></textarea>
+            
+            <div class="flex" style="margin-top: 10px; gap: 10px;">
+                <button class="btn-success" id="save-log-btn" onclick="saveLog()" style="margin: 0;">Save Details</button>
+                <button class="btn-warning" onclick="checkHistory()" style="margin: 0; background: transparent; border: 1px solid #FFAA00; color: #FFAA00;">View Past Days</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="tab-planner" class="tab-content">
+    <div class="card">
+        <h2>Weekly Planner</h2>
+        <p style="color: #aaa; font-size: 14px;">Click a day to expand. Drag workouts to reorder.</p>
+        
+        <div id="planner-container"></div>
+        <button class="btn-primary" onclick="saveFullSchedule()" style="margin-top: 20px;">Save Entire Week</button>
+    </div>
+</div>
+
+<div id="tab-reports" class="tab-content">
+    <div class="card">
+        <h2>History Logs</h2>
+        {% if all_logs %}
+            {% for log in all_logs %}
+            <div style="background: #2a2a2a; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444;">
+                <div class="flex" style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 5px;">
+                    <strong style="color: #3A86FF;">{{ log.exercise }}</strong>
+                    <span style="color: #888; font-size: 14px;">{{ log.date }}</span>
+                </div>
+                Weight: <span style="color: #38B000;">{{ log.weight_value }}kg ({{ log.weight_type }})</span><br>
+                {% if log.summary %}Notes: <em>{{ log.summary }}</em>{% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>No workouts logged yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <button id="nav-home" class="active" onclick="switchTab('home')">HOME</button>
+    <button id="nav-planner" onclick="switchTab('planner')">PLANNER</button>
+    <button id="nav-reports" onclick="switchTab('reports')">REPORTS</button>
+</div>
+
+<div id="history-modal" style="display: none; position: fixed; top: 10%; left: 5%; width: 90%; background: #222; border: 1px solid #FFAA00; border-radius: 8px; z-index: 2000; max-height: 80vh; overflow-y: auto;">
+    <div style="padding: 15px; border-bottom: 1px solid #444; display: flex; justify-content: space-between; position: sticky; top: 0; background: #222; z-index: 10;">
+        <h3 style="margin: 0; color: #FFAA00;">History</h3>
+        <button onclick="document.getElementById('history-modal').style.display='none'" style="width: auto; background: none; color: white; padding: 0;">✕</button>
+    </div>
+    <div id="h-data" style="padding: 15px;"></div>
+</div>
+
+<audio id="alarm" src="/media/alarm/tone.mp3" preload="auto"></audio>
+
+<script id="todays-workouts-data" type="application/json">{{ todays_workouts|safe }}</script>
+<script id="full-schedule-data" type="application/json">{{ full_schedule|safe }}</script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script>
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.bottom-nav button').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        document.getElementById(`nav-${tabName}`).classList.add('active');
+    }
+
+    let queue = [];
+    let state = 'stopped';
+    let phase = ''; 
+    let timeRemaining = 0;
+    let timerInterval = null;
+    let currentExercise = '';
+    let currentHistoryData = []; 
+    const todaysWorkouts = JSON.parse(document.getElementById('todays-workouts-data').textContent.replace(/'/g, '"'));
+    const fullSchedule = JSON.parse(document.getElementById('full-schedule-data').textContent.replace(/'/g, '"'));
+
+    // --- LOCAL STORAGE STATE MANAGEMENT ---
+    function saveSessionState() {
+        if (state === 'stopped') return;
+        const sessionData = {
+            date: new Date().toDateString(),
+            queue: queue,
+            state: state,
+            phase: phase,
+            timeRemaining: timeRemaining,
+            currentExercise: currentExercise,
+            currentTaskText: document.getElementById('current-task').innerText,
+            setTrackerText: document.getElementById('set-tracker').innerText
+        };
+        localStorage.setItem('workoutSession', JSON.stringify(sessionData));
+    }
+
+    function clearSessionState() {
+        localStorage.removeItem('workoutSession');
+    }
+
+    function restoreSession() {
+        const saved = localStorage.getItem('workoutSession');
+        if (!saved) return false;
+
+        const data = JSON.parse(saved);
+        if (data.date !== new Date().toDateString()) {
+            clearSessionState();
+            return false;
+        }
+
+        queue = data.queue;
+        state = data.state;
+        phase = data.phase;
+        timeRemaining = data.timeRemaining;
+        currentExercise = data.currentExercise;
+        
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('active-screen').style.display = 'block';
+        
+        document.getElementById('current-task').innerText = data.currentTaskText;
+        document.getElementById('set-tracker').innerText = data.setTrackerText;
+        
+        if(phase === 'workout') {
+            document.getElementById('log-form').style.display = 'block';
+            document.getElementById('next-btn').innerText = "Finish Set";
+        } else {
+            document.getElementById('log-form').style.display = 'none';
+            document.getElementById('next-btn').innerText = phase === 'rest' ? "Skip Rest" : "Finish Phase";
+        }
+
+        if (state === 'running') {
+            startTimer(phase !== 'workout'); 
+        } else if (state === 'paused') {
+            document.getElementById('pause-btn').innerText = 'Resume';
+            document.getElementById('stop-btn').style.display = 'block';
+            updateDisplay();
+        }
+        return true;
+    }
+
+    // --- PLANNER UI ---
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const plannerContainer = document.getElementById('planner-container');
+    
+    Object.keys(fullSchedule).sort().forEach(dayIndex => {
+        let dayName = days[dayIndex];
+        let wList = fullSchedule[dayIndex];
+        
+        let header = document.createElement('div');
+        header.className = 'day-header';
+        header.innerText = `${dayName} ▾`;
+        header.onclick = function() {
+            let list = this.nextElementSibling;
+            list.style.display = list.style.display === 'block' ? 'none' : 'block';
+        };
+        
+        let listContainer = document.createElement('div');
+        listContainer.className = 'day-list';
+        listContainer.id = `planner-list-${dayIndex}`;
+        
+        wList.forEach(w => {
+            let item = document.createElement('div');
+            item.className = 'list-item';
+            item.style.cssText = 'background: #2a2a2a; padding: 10px; margin-bottom: 5px; border-radius: 5px; border: 1px solid #444;';
+            item.setAttribute('data-name', w.name);
+            item.setAttribute('data-sets', w.sets);
+            item.setAttribute('data-rest', w.rest);
+            item.innerHTML = `☰ <strong>${w.name}</strong> <small style="color:#888;">(${w.sets} Sets)</small>`;
+            listContainer.appendChild(item);
+        });
+        
+        plannerContainer.appendChild(header);
+        plannerContainer.appendChild(listContainer);
+        new Sortable(listContainer, { animation: 150 });
+    });
+
+    function saveFullSchedule() {
+        let newSchedule = {};
+        for(let i=0; i<7; i++) {
+            let list = document.getElementById(`planner-list-${i}`);
+            let dayArray = [];
+            if(list) {
+                list.querySelectorAll('.list-item').forEach(el => {
+                    dayArray.push({
+                        name: el.getAttribute('data-name'),
+                        sets: parseInt(el.getAttribute('data-sets')),
+                        rest: parseInt(el.getAttribute('data-rest'))
+                    });
+                });
+            }
+            newSchedule[i.toString()] = dayArray;
+        }
+        fetch('/api/update_schedule/', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({schedule: newSchedule})
+        }).then(() => alert("Weekly Schedule Saved!"));
+    }
+
+    // --- WORKOUT LOGIC & INLINE EDITING ---
+    function checkHistory() {
+        fetch(`/api/history/?exercise=${encodeURIComponent(currentExercise)}`)
+        .then(r => r.json())
+        .then(data => {
+            currentHistoryData = data.history;
+            let htmlStr = "";
+            if(data.history && data.history.length > 0) {
+                data.history.forEach(row => {
+                    htmlStr += `
+                    <div id="log-entry-${row.id}" style="background:#1a1a1a; padding:10px; margin-bottom:10px; border-radius:5px; border:1px solid #333; position: relative;">
+                        <button style="position: absolute; right: 10px; top: 10px; width: auto; background: none; border: none; font-size: 18px; padding: 0; color: #FFAA00;" onclick="toggleEdit(${row.id})">✏️</button>
+                        <strong style="color:#3A86FF">${row.date}</strong><br>
+                        Weight: <span style="color:#38B000">${row.weight_value}kg (${row.weight_type})</span><br>
+                        ${row.summary ? `Notes: <em>${row.summary}</em>` : ''}
+                    </div>`;
+                });
+            } else {
+                htmlStr = "<p style='color: #aaa;'>No previous data.</p>";
+            }
+            document.getElementById('h-data').innerHTML = htmlStr;
+            document.getElementById('history-modal').style.display = 'block';
+        });
+    }
+
+    function toggleEdit(logId) {
+        let row = currentHistoryData.find(r => r.id === logId);
+        if (!row) return;
+
+        let div = document.getElementById(`log-entry-${logId}`);
+        div.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 5px;">
+                <select id="edit-type-${logId}" style="padding: 8px; background: #333; color: white; border-radius: 4px; border: 1px solid #444;">
+                    <option value="individual" ${row.weight_type==='individual'?'selected':''}>Individual</option>
+                    <option value="whole" ${row.weight_type==='whole'?'selected':''}>Whole</option>
+                </select>
+                <input type="number" id="edit-val-${logId}" value="${row.weight_value}" style="padding: 8px; background: #333; color: white; border-radius: 4px; border: 1px solid #444;" placeholder="Weight">
+                <textarea id="edit-summary-${logId}" style="padding: 8px; background: #333; color: white; border-radius: 4px; border: 1px solid #444; resize:none;" rows="3" placeholder="Notes...">${row.summary || ''}</textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button class="btn-success" style="padding: 8px 15px; font-size: 14px; width: auto; margin:0;" onclick="saveEdit(${logId})">Save</button>
+                    <button class="btn-warning" style="padding: 8px 15px; font-size: 14px; width: auto; margin:0; background: transparent; border: 1px solid #FFAA00; color: #FFAA00;" onclick="checkHistory()">Cancel</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function saveEdit(logId) {
+        let w_type = document.getElementById(`edit-type-${logId}`).value;
+        let w_val = document.getElementById(`edit-val-${logId}`).value;
+        let summary = document.getElementById(`edit-summary-${logId}`).value;
+
+        fetch('/api/edit_log/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({log_id: logId, w_type: w_type, w_val: w_val, summary: summary})
+        }).then(() => {
+            checkHistory(); 
+        });
+    }
+
+    function saveLog() {
+        let btn = document.getElementById('save-log-btn');
+        let data = {
+            exercise: currentExercise,
+            w_type: document.getElementById('w-type').value,
+            w_val: document.getElementById('w-val').value || 0,
+            summary: document.getElementById('w-summary').value,
+            duration: timeRemaining
+        };
+        fetch('/api/log/', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify(data)
+        }).then(() => {
+            btn.innerText = "Saved ✓";
+            setTimeout(() => btn.innerText = "Save Details", 2000);
+        });
+    }
+
+    function startSession() {
+        if(document.getElementById('warmup-check').checked) {
+            queue.push({type: 'warmup', taskName: 'Warmup', time: document.getElementById('warmup-time').value * 60});
+        }
+        if(document.getElementById('workout-check').checked) {
+            todaysWorkouts.forEach((w, index) => {
+                for(let i=1; i<=w.sets; i++) {
+                    queue.push({type: 'workout', taskName: w.name, setInfo: `Set ${i} of ${w.sets}`});
+                    if (i < w.sets) queue.push({type: 'rest', taskName: `Rest (Next: ${w.name} Set ${i+1})`, time: w.rest});
+                }
+                if (index < todaysWorkouts.length - 1) queue.push({type: 'rest', taskName: `Rest Before Next Exercise`, time: 240});
+            });
+        }
+        if(document.getElementById('stretch-check').checked) {
+            queue.push({type: 'stretch', taskName: 'Post Stretch', time: 300}); 
+        }
+
+        document.getElementById('setup-screen').style.display = 'none';
+        document.getElementById('active-screen').style.display = 'block';
+        nextPhase();
+    }
+
+    function stopSession() {
+        if(confirm("Are you sure you want to completely stop this workout?")) {
+            clearInterval(timerInterval);
+            queue = [];
+            state = 'stopped';
+            clearSessionState();
+            document.getElementById('alarm').pause();
+            document.getElementById('active-screen').style.display = 'none';
+            document.getElementById('setup-screen').style.display = 'block';
+            document.getElementById('stop-btn').style.display = 'none';
+        }
+    }
+
+    function nextPhase() {
+        clearInterval(timerInterval);
+        document.getElementById('alarm').pause();
+        document.getElementById('alarm').currentTime = 0;
+        document.getElementById('stop-btn').style.display = 'none'; 
+        
+        if(phase === 'workout' && queue.length > 0 && queue[0].type === 'rest' && queue[0].time === 240) {
+            document.getElementById('w-val').value = '';
+            document.getElementById('w-summary').value = '';
+        }
+
+        if(queue.length === 0) {
+            clearSessionState();
+            fetch('/api/finish_day/', {method: 'POST', headers:{'X-CSRFToken': '{{ csrf_token }}'}}).then(() => location.reload());
+            return;
+        }
+
+        let nextTask = queue.shift();
+        phase = nextTask.type;
+        document.getElementById('current-task').innerText = nextTask.taskName;
+        document.getElementById('set-tracker').innerText = nextTask.setInfo || "";
+
+        if(phase === 'workout') {
+            currentExercise = nextTask.taskName;
+            document.getElementById('log-form').style.display = 'block';
+            document.getElementById('next-btn').innerText = "Finish Set";
+            timeRemaining = 0; 
+            startTimer(false);
+        } else {
+            document.getElementById('log-form').style.display = 'none';
+            document.getElementById('next-btn').innerText = phase === 'rest' ? "Skip Rest" : "Finish Phase";
+            timeRemaining = nextTask.time;
+            startTimer(true);
+        }
+        saveSessionState();
+    }
+
+    function startTimer(countdown) {
+        state = 'running';
+        document.getElementById('pause-btn').innerText = 'Pause';
+        updateDisplay();
+        timerInterval = setInterval(() => {
+            if(countdown) {
+                timeRemaining--;
+                if(timeRemaining <= 0) { clearInterval(timerInterval); document.getElementById('alarm').play(); }
+            } else { timeRemaining++; }
+            updateDisplay();
+            saveSessionState(); 
+        }, 1000);
+    }
+
+    function togglePause() {
+        if(state === 'running') {
+            clearInterval(timerInterval); 
+            state = 'paused';
+            document.getElementById('pause-btn').innerText = 'Resume'; 
+            document.getElementById('stop-btn').style.display = 'block';
+            document.getElementById('alarm').pause();
+            saveSessionState();
+        } else if(state === 'paused') { 
+            document.getElementById('stop-btn').style.display = 'none';
+            startTimer(phase !== 'workout'); 
+        }
+    }
+
+    function updateDisplay() {
+        let m = Math.floor(Math.abs(timeRemaining) / 60).toString().padStart(2, '0');
+        let s = (Math.abs(timeRemaining) % 60).toString().padStart(2, '0');
+        document.getElementById('timer').innerText = `${m}:${s}`;
+    }
+
+    window.onload = function() {
+        {% if not completed %}
+        restoreSession();
+        {% endif %}
+    };
+</script>
+{% endblock %}

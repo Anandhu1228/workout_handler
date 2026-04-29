@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Workout Tracker</title>
+    <style>
+        body { background: #121212; color: #E0E0E0; font-family: sans-serif; padding: 15px; padding-bottom: 80px; margin: 0; }
+        .card { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; }
+        input, select, textarea, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: none; background: #333; color: white; font-size: 16px; box-sizing: border-box;}
+        button { cursor: pointer; font-weight: bold; }
+        .btn-primary { background: #3A86FF; }
+        .btn-success { background: #38B000; }
+        .btn-warning { background: #FFAA00; color: #121212;}
+        .flex { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+    </style>
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>

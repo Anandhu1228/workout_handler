@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+    <h2>Workout Reports & Progress</h2>
+    
+    <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; border: 1px solid #444; margin-bottom: 20px;">
+        <label style="color: #aaa; font-weight: bold;">Select Exercise to Graph:</label>
+        <select id="exercise-select" onchange="updateChart()" style="margin-bottom: 15px;">
+            <option value="">-- Choose Exercise --</option>
+            </select>
+        
+        <canvas id="progressChart" width="400" height="250"></canvas>
+    </div>
+
+    <h3 style="margin-top: 20px;">Recent Logs</h3>
+    {% if logs %}
+        <div id="log-list">
+            {% for log in logs %}
+            <div style="background: #2a2a2a; padding: 15px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444;">
+                <div class="flex" style="border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 5px;">
+                    <strong style="color: #3A86FF;">{{ log.exercise }}</strong>
+                    <span style="color: #888; font-size: 14px;">{{ log.date }}</span>
+                </div>
+                <div>
+                    Weight: <span style="color: #38B000;">{{ log.weight_value }}kg ({{ log.weight_type }})</span><br>
+                    Time Taken: <span style="color: #FFAA00;">{{ log.duration }} seconds</span><br>
+                    {% if log.summary %}Notes: <em>{{ log.summary }}</em>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>No workouts logged yet. Go lift.</p>
+    {% endif %}
+</div>
+
+{{ logs|json_script:"log-data" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Safely load the data passed from Django
+    const rawLogs = JSON.parse(document.getElementById('log-data').textContent);
+    let myChart = null;
+
+    // 1. Extract unique exercises for the dropdown
+    const uniqueExercises = [...new Set(rawLogs.map(log => log.exercise))];
+    const selectEl = document.getElementById('exercise-select');
+    
+    uniqueExercises.forEach(ex => {
+        let opt = document.createElement('option');
+        opt.value = ex;
+        opt.innerHTML = ex;
+        selectEl.appendChild(opt);
+    });
+
+    // 2. Initialize an empty chart with Dark Mode styling
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    
+    function initChart() {
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [] },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { ticks: { color: '#aaa' }, grid: { color: '#333' } },
+                    y: { ticks: { color: '#aaa' }, grid: { color: '#333' }, beginAtZero: false }
+                },
+                plugins: {
+                    legend: { labels: { color: '#fff' } }
+                }
+            }
+        });
+    }
+
+    // 3. Update the chart when an exercise is picked
+    function updateChart() {
+        const selectedEx = selectEl.value;
+        if (!selectedEx) return;
+
+        // Filter logs for this exercise and reverse them so oldest is first (left to right graph)
+        const filteredLogs = rawLogs.filter(l => l.exercise === selectedEx).reverse();
+
+        const labels = filteredLogs.map(l => l.date);
+        const dataPoints = filteredLogs.map(l => l.weight_value);
+
+        myChart.data.labels = labels;
+        myChart.data.datasets = [{
+            label: `${selectedEx} Weight (kg)`,
+            data: dataPoints,
+            borderColor: '#38B000', // Accent Green
+            backgroundColor: 'rgba(56, 176, 0, 0.2)',
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: '#3A86FF',
+            fill: true,
+            tension: 0.1 // Slight curve
+        }];
+        
+        myChart.update();
+    }
+
+    // Start it up
+    initChart();
+    
+    // Auto-load the first exercise if data exists
+    if (uniqueExercises.length > 0) {
+        selectEl.value = uniqueExercises[0];
+        updateChart();
+    }
+</script>
+{% endblock %}
