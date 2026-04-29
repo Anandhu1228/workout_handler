@@ -15,4 +15,5 @@ urlpatterns = [
     path('api/edit_log/', views.api_edit_log, name='api_edit_log'),
     path('api/finish_day/', views.api_finish_day, name='api_finish_day'),
     path('api/update_schedule/', views.api_update_schedule, name='api_update_schedule'),
+    path('api/upload_audio/', views.api_upload_audio, name='api_upload_audio'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

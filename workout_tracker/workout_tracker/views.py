@@ -1,21 +1,17 @@
+import os
+import json
+from datetime import datetime
 from django.shortcuts import render, redirect
 from django.contrib.auth.models import User
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from datetime import datetime
-import json
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from .db_connector import db
 
-DEFAULT_SCHEDULE = {
-    "0": [{"name": "Abs Circuit", "sets": 1, "rest": 15}, {"name": "Two Arm Dumbbell Rows", "sets": 3, "rest": 90}, {"name": "Floor Dumbbell Pullover", "sets": 2, "rest": 60}, {"name": "Biceps Curl", "sets": 2, "rest": 60}, {"name": "Hammer Curl", "sets": 2, "rest": 60}],
-    "1": [{"name": "Forearms Circuit", "sets": 1, "rest": 15}, {"name": "Floor Dumbbell Press", "sets": 3, "rest": 90}, {"name": "Floor Dumbbell Fly", "sets": 2, "rest": 60}, {"name": "Floor Skull Crushers", "sets": 2, "rest": 60}, {"name": "Dumbbell Overhead Extension", "sets": 2, "rest": 60}],
-    "2": [{"name": "Goblet Squat", "sets": 3, "rest": 90}, {"name": "Dumbbell RDL", "sets": 3, "rest": 120}, {"name": "Seated Dumbbell Shoulder Press", "sets": 3, "rest": 90}, {"name": "Lateral Raise", "sets": 3, "rest": 60}, {"name": "Reverse Fly", "sets": 2, "rest": 60}],
-    "3": [{"name": "Abs Circuit (Thurs)", "sets": 1, "rest": 15}, {"name": "Two Arm Dumbbell Rows", "sets": 3, "rest": 90}, {"name": "Floor Dumbbell Pullover", "sets": 2, "rest": 60}, {"name": "Biceps Curl", "sets": 2, "rest": 60}, {"name": "Hammer Curl", "sets": 2, "rest": 60}],
-    "4": [{"name": "Forearms Circuit", "sets": 1, "rest": 15}, {"name": "Floor Dumbbell Press", "sets": 3, "rest": 90}, {"name": "Floor Dumbbell Fly", "sets": 2, "rest": 60}, {"name": "Floor Skull Crushers", "sets": 2, "rest": 60}, {"name": "Dumbbell Overhead Extension", "sets": 2, "rest": 60}],
-    "5": [{"name": "Goblet Squat", "sets": 3, "rest": 90}, {"name": "Dumbbell RDL", "sets": 3, "rest": 120}, {"name": "Seated Dumbbell Shoulder Press", "sets": 3, "rest": 90}, {"name": "Lateral Raise", "sets": 3, "rest": 60}, {"name": "Reverse Fly", "sets": 2, "rest": 60}],
-    "6": [{"name": "Rest Day - Stretch Only", "sets": 1, "rest": 0}]
-}
+# Blank schedule for fresh users
+DEFAULT_SCHEDULE = {str(i): [] for i in range(7)}
 
 def get_schedule():
     custom = db.get_full_schedule()
@@ -86,3 +82,22 @@ def api_update_schedule(request):
         data = json.loads(request.body)
         db.save_full_schedule(data['schedule'])
         return JsonResponse({'status': 'ok'})
+
+@login_required
+def api_upload_audio(request):
+    if request.method == 'POST' and request.FILES.get('audio'):
+        audio_file = request.FILES['audio']
+        if audio_file.size > 10 * 1024 * 1024:
+            return JsonResponse({'status': 'error', 'msg': 'File too large. Max 10MB.'})
+        
+        save_dir = os.path.join(settings.MEDIA_ROOT, 'alarm')
+        os.makedirs(save_dir, exist_ok=True)
+        file_path = os.path.join(save_dir, 'tone.mp3')
+        
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            
+        fs = FileSystemStorage(location=save_dir)
+        fs.save('tone.mp3', audio_file)
+        return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'error', 'msg': 'No file uploaded.'})
